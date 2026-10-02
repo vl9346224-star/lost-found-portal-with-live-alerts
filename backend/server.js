@@ -17,9 +17,14 @@ app.get("/", (req, res) => res.json({ message: "Lost & Found API running" }));
 
 // ---- Routes (each member mounts their own file here) ----
 // app.use("/api/auth", require("./routes/authRoutes"));      // Member 4
-// app.use("/api/items", require("./routes/itemRoutes"));     // Member 5
+app.use("/api/items", require("./routes/itemRoutes"));     // Member 5
 // app.use("/api/search", require("./routes/searchRoutes"));  // Member 6
 // app.use("/api/admin", require("./routes/adminRoutes"));    // Member 7
+
+// Error handler (multer errors, etc.)
+app.use((err, req, res, next) => {
+  res.status(400).json({ message: err.message || "Something went wrong" });
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
