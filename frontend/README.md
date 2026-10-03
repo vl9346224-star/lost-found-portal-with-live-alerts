@@ -16,8 +16,8 @@ Open http://localhost:5173
 |---|---|---|---|
 | POST | /api/auth/register | name, email, rollNumber, phone, password | `{ token, user }` |
 | POST | /api/auth/login | email, password | `{ token, user }` |
-| GET | /api/auth/me | — (Bearer token) | `{ user }` |
-| PUT | /api/auth/me | name, phone | `{ user }` |
+| GET | /api/auth/me | — (Bearer token) | `user` (bare object) |
+| PUT | /api/auth/me | name, phone | `user` (bare object) |
 
 `user` = `{ id, name, email, rollNumber, phone, role }` where role is `student` or `admin`.
 Errors: `{ message: "..." }` with 400 / 401.
@@ -27,3 +27,7 @@ Errors: `{ message: "..." }` with 400 / 401.
 - Import `api` from `src/services/api.js`. Token is added for you.
 - Replace `Placeholder` routes in `src/App.jsx` with your pages.
 - Wrap admin routes: `<ProtectedRoute adminOnly>`.
+
+
+## Which UI runs?
+`index.html` is a standalone app that talks to the backend directly (default `http://localhost:5000`, override with `localStorage.lf_api`). The React code in `src/` is not mounted by it.

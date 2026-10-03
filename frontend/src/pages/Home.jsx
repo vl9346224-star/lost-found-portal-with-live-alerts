@@ -25,7 +25,7 @@ export default function Home() {
       </section>
       <section className="recent">
         <h2>Recent reports</h2>
-        {/* Member 3 / 5: replace with real list from GET /api/items?limit=5 */}
+        {/* Member 3 / 5: replace with real list from GET /api/search?limit=5 */}
         <p className="empty">No reports yet. When someone reports an item, it shows up here.</p>
       </section>
     </>

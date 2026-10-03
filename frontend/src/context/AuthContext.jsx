@@ -20,6 +20,12 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // api.js fires this when the server answers 401 (expired or invalid token)
+  useEffect(() => {
+    window.addEventListener("auth:expired", logout);
+    return () => window.removeEventListener("auth:expired", logout);
+  }, [logout]);
+
   // Re-validate session on page load
   useEffect(() => {
     if (!localStorage.getItem("token")) return;
