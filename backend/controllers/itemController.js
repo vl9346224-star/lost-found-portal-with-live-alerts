@@ -1,17 +1,35 @@
-const fs = require("fs");
-const path = require("path");
 const Item = require("../models/Item");
+const { removeImageFile } = require("../utils/files");
+const { notifyUser } = require("../utils/notify");
 
 const isOwnerOrAdmin = (item, user) =>
   item.reportedBy.toString() === user.id || user.role === "admin";
 
-const removeImageFile = (imageUrl) => {
-  if (!imageUrl) return;
-  const filePath = path.join(__dirname, "..", imageUrl);
-  fs.unlink(filePath, () => {}); // ignore errors
+// Live alert: tell owners of matching opposite-type reports (same category)
+const notifyPossibleMatches = async (app, item, reporterId) => {
+  const opposite = item.type === "lost" ? "found" : "lost";
+  const matches = await Item.find({
+    type: opposite,
+    category: item.category,
+    status: { $in: ["pending", "verified"] },
+    reportedBy: { $ne: reporterId },
+  })
+    .limit(10)
+    .select("reportedBy title");
+
+  const seen = new Set();
+  for (const m of matches) {
+    const owner = m.reportedBy.toString();
+    if (seen.has(owner)) continue;
+    seen.add(owner);
+    await notifyUser(app, owner, {
+      type: "possible_match",
+      message: `A ${item.type} item "${item.title}" (${item.category}) was reported. It may match your report "${m.title}".`,
+      item: item._id,
+    });
+  }
 };
 
-// Shared create logic for lost + found
 const createItem = (type) => async (req, res) => {
   try {
     const { title, description, category, location, date, contactInfo } = req.body;
@@ -33,11 +51,17 @@ const createItem = (type) => async (req, res) => {
       imageUrl: req.file ? "/uploads/" + req.file.filename : "",
     });
 
-    // HOOK for Member 7 (live alerts): emits only if Socket.IO is set up
-    const io = req.app.get("io");
-    if (io) io.emit("newItem", item);
-
     res.status(201).json(item);
+
+    // Live alerts (after the response, so they never slow down or break the request)
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("newItem", item); // everyone
+      io.to("admins").emit("adminNewReport", item); // admins only
+    }
+    notifyPossibleMatches(req.app, item, req.user.id).catch((e) =>
+      console.error("match notify failed:", e.message)
+    );
   } catch (err) {
     if (req.file) removeImageFile("/uploads/" + req.file.filename);
     res.status(400).json({ message: err.message });
@@ -47,7 +71,6 @@ const createItem = (type) => async (req, res) => {
 exports.reportLost = createItem("lost");
 exports.reportFound = createItem("found");
 
-// Shared list logic. Basic list only - search/filter is Member 6's job.
 const listItems = (type) => async (req, res) => {
   try {
     const items = await Item.find({ type, status: { $ne: "removed" } })
@@ -97,7 +120,6 @@ exports.updateItem = async (req, res) => {
       return res.status(403).json({ message: "Not allowed to edit this report" });
     }
 
-    // Only these fields can be edited (status/type/reportedBy are protected)
     const editable = ["title", "description", "category", "location", "date", "contactInfo"];
     editable.forEach((f) => {
       if (req.body[f] !== undefined) item[f] = req.body[f];

@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-require("./User");
+require("./User"); // registers the User model so populate("reportedBy") works
 
 // Shared values - agreed with the team (see README)
 const TYPES = ["lost", "found"];
@@ -19,11 +19,13 @@ const itemSchema = new mongoose.Schema(
     status: { type: String, enum: STATUSES, default: "pending" },
     reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     recoveredAt: { type: Date },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    verifiedAt: { type: Date },
+    removedReason: { type: String, trim: true },
   },
   { timestamps: true }
 );
 
-// Helps Member 6's search
 itemSchema.index({ title: "text", description: "text", location: "text" });
 
 module.exports = mongoose.model("Item", itemSchema);
