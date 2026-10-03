@@ -57,7 +57,7 @@ async function api(path, {method='GET', body, form} = {}) {
   return d;
 }
 function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;$('#toasts').append(t);setTimeout(()=>t.remove(),5000)}
-const img = i => i.image ? (/^http/.test(i.image) ? i.image : API+'/'+i.image.replace(/^\/+/,'').replace(/\\/g,'/')) : '';
+const img = i => { const p = i.imageUrl || ''; return p ? (/^http/.test(p) ? p : API+'/'+p.replace(/^\/+/,'')) : ''; };
 const fmt = d => d ? new Date(d).toLocaleDateString() : '';
 const itemsOf = d => d.items || d.reports || d.data || (Array.isArray(d)?d:[]);
 
@@ -74,7 +74,7 @@ function connect(){
   socket.on('notification', n => { toast(n.message||n.title||'New notification'); loadBell(); });
 }
 const refreshIfList = () => { if(['home','search','mine','admin'].includes(view) && !$('#modal').innerHTML) render(); };
-async function loadBell(){ if(!token) return; try{const d=await api('/api/notifications');window._unread=d.unreadCount||0;window._notes=d.notifications||[];drawNav()}catch{} }
+async function loadBell(){ if(!token) return; try{const d=await api('/api/notifications');window._unread=d.unread||0;window._notes=d.notifications||[];drawNav()}catch{} }
 
 function drawNav(){
   const tabs = !user ? [['login','Log in'],['register','Register']] : [['home','Home'],['search','Search'],['lost','Report lost'],['found','Report found'],['mine','My reports'],['recovered','Recovered']];
@@ -135,7 +135,7 @@ async function listView(){
   $('#app').innerHTML=`<h2>${rec?'Recovered items':'Search lost &amp; found items'}</h2><form class="bar" id="bar"><input name="q" placeholder="Search title, description, location" value="${esc(q.q)}">
   ${sel('type',['lost','found'],'Lost &amp; found')}${sel('category',cats,'All categories')}${rec?'<span></span>':sel('status',['pending','verified','recovered'],'Any status')}
   <input name="location" placeholder="Location (e.g. library)" value="${esc(q.location)}" aria-label="Location"><input name="from" type="date" value="${q.from}" aria-label="From date" title="From date"><input name="to" type="date" value="${q.to}" aria-label="To date" title="To date">
-  <select name="sort" aria-label="Sort"><option value="">Sort: default</option><option value="-createdAt" ${q.sort==='-createdAt'?'selected':''}>Newest first</option><option value="createdAt" ${q.sort==='createdAt'?'selected':''}>Oldest first</option></select></form>
+  <select name="sort" aria-label="Sort"><option value="">Sort: default</option><option value="newest" ${q.sort==='newest'?'selected':''}>Newest first</option><option value="oldest" ${q.sort==='oldest'?'selected':''}>Oldest first</option></select></form>
   <div class="row" style="margin:-6px 0 12px"><button type="button" class="alt" id="clr">Clear filters</button></div>
   <div class="grid">${itemsOf(d).map(card).join('')||'<p class="meta">No items match. Try fewer filters, or report the item yourself.</p>'}</div>
   <div class="pager"><button class="alt" id="pv" ${d.page<=1?'disabled':''}>Previous</button><span class="meta">Page ${d.page||1} of ${d.pages||1} (${d.total||0} items)</span><button class="alt" id="nx" ${d.page>=d.pages?'disabled':''}>Next</button></div>`;
@@ -182,14 +182,26 @@ async function detail(id){
   $('#modal').innerHTML=`<div class="modal"><div class="panel">${img(i)?`<img src="${esc(img(i))}" alt="">`:''}<h2>${esc(i.title)}</h2>
   <span class="pill ${i.type}">${i.type}</span><span class="pill ${i.status}">${i.status}</span><span class="pill">${label(i.category)}</span>
   <p>${esc(i.description)}</p><p class="meta">Location: ${esc(i.location)}<br>Date: ${fmt(i.date)}<br>Contact: <b>${esc(i.contactInfo)}</b>${i.reportedBy?.name?`<br>Reported by ${esc(i.reportedBy.name)}`:''}</p>
-  <div class="row">${(mine||admin)&&i.status!=='recovered'?'<button id="rec" class="tag">Mark as recovered</button>':''}${mine?'<button id="del" class="warn">Delete report</button>':''}<button id="x" class="alt">Close</button></div></div></div>`;
+  <div class="row">${(mine||admin)&&i.status!=='recovered'?'<button id="rec" class="tag">Mark as recovered</button>':''}${(mine||admin)?'<button id="edt" class="alt">Edit</button>':''}${mine?'<button id="del" class="warn">Delete report</button>':''}<button id="x" class="alt">Close</button></div></div></div>`;
   $('#x').onclick=()=>{$('#modal').innerHTML=''};
   const r=$('#rec'); if(r) r.onclick=async()=>{try{await api(`/api/items/${id}/recovered`,{method:'PATCH'});toast('Marked as recovered');$('#modal').innerHTML='';render()}catch(e){toast(e.message)}};
+  const ed=$('#edt'); if(ed) ed.onclick=()=>editView(i);
   const dl=$('#del'); if(dl) dl.onclick=async()=>{if(!confirm('Delete this report?'))return;try{await api('/api/items/'+id,{method:'DELETE'});$('#modal').innerHTML='';render()}catch(e){toast(e.message)}};
 }
 
+function editView(i){
+  $('#modal').innerHTML=`<div class="modal"><div class="panel"><h2>Edit report</h2><form id="ef"><label>Title</label><input name="title" required value="${esc(i.title)}">
+  <label>Category</label><select name="category">${CATS.map(c=>`<option value="${c}" ${c===i.category?'selected':''}>${label(c)}</option>`).join('')}</select>
+  <label>Description</label><textarea name="description" rows="3" required>${esc(i.description)}</textarea><label>Location</label><input name="location" required value="${esc(i.location)}">
+  <label>Date</label><input name="date" type="date" required value="${i.date?new Date(i.date).toISOString().slice(0,10):''}"><label>How to contact you</label><input name="contactInfo" required value="${esc(i.contactInfo)}">
+  <label>Replace photo (optional)</label><input name="image" type="file" accept="image/*"><div class="row"><button class="tag">Save changes</button><button type="button" class="alt" id="ex">Cancel</button></div></form></div></div>`;
+  $('#ex').onclick=()=>detail(i._id);
+  $('#ef').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);if(!fd.get('image').size)fd.delete('image');
+    try{await api('/api/items/'+i._id,{method:'PUT',form:fd});toast('Report updated');$('#modal').innerHTML='';render()}catch(x){toast(x.message)}};
+}
+
 async function notesView(){
-  const d=await api('/api/notifications'); window._unread=d.unreadCount||0; drawNav(); const l=d.notifications||[];
+  const d=await api('/api/notifications'); window._unread=d.unread||0; drawNav(); const l=d.notifications||[];
   $('#app').innerHTML=`<h2>Alerts</h2><div class="row"><button class="alt" id="all">Mark all read</button></div><div class="panel" style="max-width:none;margin-top:12px;padding:0">${l.map(n=>`<div class="note ${n.read?'':'un'}" data-id="${n._id}">${esc(n.message||n.title)}<div class="meta">${fmt(n.createdAt)}</div></div>`).join('')||'<div class="note">No alerts yet. You will be notified about possible matches and report updates.</div>'}</div>`;
   $('#all').onclick=async()=>{await api('/api/notifications/read-all',{method:'PATCH'});notesView()};
   document.querySelectorAll('.note.un').forEach(n=>n.onclick=async()=>{await api(`/api/notifications/${n.dataset.id}/read`,{method:'PATCH'});notesView()});
