@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+require("./User");
 
 // Shared values - agreed with the team (see README)
 const TYPES = ["lost", "found"];
