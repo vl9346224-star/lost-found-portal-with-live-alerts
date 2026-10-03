@@ -25,7 +25,7 @@ export default function App() {
         <Route path="/items/:id" element={<ItemDetails />} />
         <Route path="/search" element={<Search />} />
         <Route path="/my-reports" element={<MyReports />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
