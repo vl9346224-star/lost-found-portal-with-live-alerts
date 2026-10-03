@@ -1,8 +1,21 @@
-// TEMPORARY STUB - Member 4 will replace this with real JWT verification.
-// Contract: after this middleware runs, req.user = { id, role } must exist.
-const protect = (req, res, next) => {
-  req.user = { id: "64b000000000000000000001", role: "student" };
-  next();
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+
+// After this runs: req.user = { id, role, name }
+const protect = async (req, res, next) => {
+  const header = req.headers.authorization || "";
+  if (!header.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Not logged in" });
+  }
+  try {
+    const payload = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
+    const user = await User.findById(payload.id).select("_id role name");
+    if (!user) return res.status(401).json({ message: "User no longer exists" });
+    req.user = { id: user._id.toString(), role: user.role, name: user.name };
+    next();
+  } catch (err) {
+    res.status(401).json({ message: "Invalid or expired token" });
+  }
 };
 
 const adminOnly = (req, res, next) => {
